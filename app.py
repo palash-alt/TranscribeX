@@ -1,3 +1,4 @@
+import time
 import threading
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -15,6 +16,7 @@ from utils.exporter import save_transcript_to_file
 from utils.temp_manager import cleanup_file
 from utils.performance_manager import detect_optimal_hardware_config
 from utils.chunk_manager import split_audio_into_chunks, merge_chunk_segments
+from utils.resource_manager import get_resource_snapshot, calculate_eta
 
 cancel_requested = False
 current_segments = []
@@ -22,12 +24,43 @@ current_segments = []
 ctk.set_appearance_mode("dark")
 
 app = ctk.CTk()
-app.geometry("900x680")
-app.title("Transcript Generator v2.1")
+app.geometry("920x720")
+app.title("Transcript Generator v2.2 (Sprint 1)")
 
-# Controls Frame for Language Selection
+# Thread-safe GUI Dispatcher Helper
+def safe_gui(widget_func, *args, **kwargs):
+    app.after(0, lambda: widget_func(*args, **kwargs))
+
+# --- Resource Monitor Panel ---
+res_frame = ctk.CTkFrame(app)
+res_frame.pack(pady=5, padx=20, fill="x")
+
+sys_metrics_lbl = ctk.CTkLabel(
+    res_frame,
+    text="CPU: --%  |  RAM: --% (-- GB Free)  |  Disk: -- GB Free",
+    font=("Segoe UI", 12, "bold")
+)
+sys_metrics_lbl.pack(pady=4)
+
+task_metrics_lbl = ctk.CTkLabel(
+    res_frame,
+    text="Chunk: --/--  |  ETA: --m --s  |  Model: --  |  Lang: Auto Detect",
+    font=("Segoe UI", 11)
+)
+task_metrics_lbl.pack(pady=2)
+
+def update_sys_metrics_ui():
+    snap = get_resource_snapshot()
+    sys_metrics_lbl.configure(
+        text=f"CPU: {snap['cpu_percent']}%  |  RAM: {snap['ram_percent']}% ({snap['ram_free_gb']} GB Free)  |  Disk: {snap['disk_free_gb']} GB Free"
+    )
+    app.after(1000, update_sys_metrics_ui)
+
+app.after(500, update_sys_metrics_ui)
+
+# --- Controls Frame (Language Selector) ---
 controls_frame = ctk.CTkFrame(app)
-controls_frame.pack(pady=10, padx=20, fill="x")
+controls_frame.pack(pady=5, padx=20, fill="x")
 
 lang_label = ctk.CTkLabel(controls_frame, text="Language:")
 lang_label.grid(row=0, column=0, padx=10, pady=5)
@@ -57,17 +90,18 @@ secondary_lang_dropdown.set("Spanish")
 secondary_lang_dropdown.grid(row=0, column=2, padx=10, pady=5)
 secondary_lang_dropdown.grid_remove()
 
-def get_selected_language_code():
+def get_selected_language_name_and_code():
     selected_primary = primary_lang_dropdown.get()
     if selected_primary == "Other...":
-        return other_lang_map.get(secondary_lang_dropdown.get(), None)
-    return primary_lang_map.get(selected_primary, None)
+        name = secondary_lang_dropdown.get()
+        return name, other_lang_map.get(name, None)
+    return selected_primary, primary_lang_map.get(selected_primary, None)
 
-textbox = ctk.CTkTextbox(app, width=850, height=400)
-textbox.pack(pady=10)
+textbox = ctk.CTkTextbox(app, width=870, height=380)
+textbox.pack(pady=5)
 
 status = ctk.CTkLabel(app, text="Ready")
-status.pack(pady=5)
+status.pack(pady=2)
 
 def cancel_process():
     global cancel_requested
@@ -75,7 +109,7 @@ def cancel_process():
 
 def check_cancel():
     if cancel_requested:
-        status.configure(text="❌ Transcription Cancelled")
+        safe_gui(status.configure, text="❌ Transcription Cancelled")
         raise Exception("Operation Cancelled")
 
 def process_video(file):
@@ -84,38 +118,48 @@ def process_video(file):
     current_segments = []
     temp_audio = None
 
-    button.configure(state="disabled", text="Processing...")
-    cancel_button.configure(state="normal")
-    save_button.configure(state="disabled")
+    safe_gui(button.configure, state="disabled", text="Processing...")
+    safe_gui(cancel_button.configure, state="normal")
+    safe_gui(save_button.configure, state="disabled")
 
     try:
         if not is_ffmpeg_available():
-            status.configure(text="❌ FFmpeg not found")
-            textbox.delete("1.0", "end")
-            textbox.insert(
+            safe_gui(status.configure, text="❌ FFmpeg not found")
+            safe_gui(textbox.delete, "1.0", "end")
+            safe_gui(
+                textbox.insert,
                 "end",
-                "Error: FFmpeg executable is not found on your system PATH.\n\n"
-                "Please install FFmpeg to continue."
+                "Error: FFmpeg executable is not found on your system PATH.\nPlease install FFmpeg to continue."
             )
             return
 
         perf_config = detect_optimal_hardware_config()
-        lang_code = get_selected_language_code()
+        lang_name, lang_code = get_selected_language_name_and_code()
 
-        status.configure(text="⏳ Extracting audio...")
+        safe_gui(status.configure, text="⏳ Extracting audio...")
         temp_audio = extract_audio(file)
         check_cancel()
 
-        status.configure(text=f"⏳ Splitting audio for {perf_config['model_name']} engine...")
+        safe_gui(status.configure, text=f"⏳ Splitting audio for {perf_config['model_name']} engine...")
         chunks = split_audio_into_chunks(temp_audio, perf_config["chunk_duration"])
         check_cancel()
 
         chunk_results = []
         total_chunks = len(chunks)
+        start_time = time.time()
 
         for idx, chunk in enumerate(chunks, start=1):
             check_cancel()
-            status.configure(
+
+            elapsed = time.time() - start_time
+            eta_str = calculate_eta(idx - 1, total_chunks, elapsed)
+
+            safe_gui(
+                task_metrics_lbl.configure,
+                text=f"Chunk: {idx}/{total_chunks}  |  ETA: {eta_str}  |  Model: {perf_config['model_name']}  |  Lang: {lang_name}"
+            )
+            safe_gui(
+                status.configure,
                 text=f"🎤 Transcribing chunk {idx}/{total_chunks} ({perf_config['model_name']} | {perf_config['device']})..."
             )
 
@@ -140,27 +184,31 @@ def process_video(file):
         transcript_text = "\n".join(s["text"] for s in merged_segments)
 
         if not is_valid_transcript(transcript_text):
-            status.configure(text="❌ No meaningful speech detected.")
-            textbox.delete("1.0", "end")
-            textbox.insert("end", get_validation_error_message())
+            safe_gui(status.configure, text="❌ No meaningful speech detected.")
+            safe_gui(textbox.delete, "1.0", "end")
+            safe_gui(textbox.insert, "end", get_validation_error_message())
             return
 
         current_segments = merged_segments
-        textbox.delete("1.0", "end")
-        textbox.insert("end", transcript_text)
-        save_button.configure(state="normal")
-        status.configure(text=f"✅ Completed! ({perf_config['model_name']} model)")
+        safe_gui(textbox.delete, "1.0", "end")
+        safe_gui(textbox.insert, "end", transcript_text)
+        safe_gui(save_button.configure, state="normal")
+        safe_gui(status.configure, text=f"✅ Completed! ({perf_config['model_name']} model)")
+        safe_gui(
+            task_metrics_lbl.configure,
+            text=f"Chunk: {total_chunks}/{total_chunks}  |  ETA: 00m 00s  |  Model: {perf_config['model_name']}  |  Lang: {lang_name}"
+        )
 
     except Exception as e:
         if str(e) != "Operation Cancelled":
-            status.configure(text="❌ Error")
-            textbox.delete("1.0", "end")
-            textbox.insert("end", str(e))
+            safe_gui(status.configure, text="❌ Error")
+            safe_gui(textbox.delete, "1.0", "end")
+            safe_gui(textbox.insert, "end", str(e))
     finally:
         if temp_audio:
             cleanup_file(temp_audio)
-        button.configure(state="normal", text="Select Video")
-        cancel_button.configure(state="disabled")
+        safe_gui(button.configure, state="normal", text="Select Video")
+        safe_gui(cancel_button.configure, state="disabled")
 
 def open_video():
     file = filedialog.askopenfilename(filetypes=SUPPORTED_VIDEO_TYPES)
