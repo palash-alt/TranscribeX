@@ -58,9 +58,9 @@ def get_audio_duration(audio_path: str) -> float:
 
     return 0.0
 
-def split_audio_into_chunks(audio_path: str, chunk_duration_sec: int) -> List[Dict[str, Any]]:
+def split_audio_into_chunks(audio_path: str, chunk_duration_sec: int, overlap_sec: float = 1.5) -> List[Dict[str, Any]]:
     """
-    Splits an audio file into chunks of `chunk_duration_sec` seconds.
+    Splits an audio file into chunks of `chunk_duration_sec` seconds with `overlap_sec` overlap.
     Returns a list of dictionaries with chunk file path, start offset, and duration.
     """
     total_duration = get_audio_duration(audio_path)
@@ -69,6 +69,7 @@ def split_audio_into_chunks(audio_path: str, chunk_duration_sec: int) -> List[Di
 
     chunks = []
     current_start = 0.0
+    step = max(1.0, float(chunk_duration_sec) - float(overlap_sec))
 
     while current_start < total_duration:
         duration = min(float(chunk_duration_sec), total_duration - current_start)
@@ -111,26 +112,61 @@ def split_audio_into_chunks(audio_path: str, chunk_duration_sec: int) -> List[Di
             "is_temp": True
         })
 
-        current_start += duration
+        if current_start + duration >= total_duration:
+            break
+
+        current_start += step
 
     return chunks
 
 def merge_chunk_segments(chunk_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Merges transcribed segments from multiple audio chunks, adjusting segment
-    timestamps relative to the original audio file start.
+    Merges transcribed segments from multiple audio chunks with overlap, adjusting segment
+    timestamps relative to the original audio file start and removing duplicate boundary segments.
     """
-    merged_segments = []
+    raw_segments = []
 
     for item in chunk_results:
         offset = item.get("start_offset", 0.0)
         segments = item.get("segments", [])
 
         for seg in segments:
-            merged_segments.append({
-                "start": float(seg["start"]) + offset,
-                "end": float(seg["end"]) + offset,
-                "text": seg["text"]
+            raw_segments.append({
+                "start": round(float(seg["start"]) + offset, 2),
+                "end": round(float(seg["end"]) + offset, 2),
+                "text": seg["text"].strip()
             })
 
+    if not raw_segments:
+        return []
+
+    # Sort primarily by start timestamp
+    raw_segments.sort(key=lambda s: (s["start"], s["end"]))
+
+    merged_segments = []
+    for seg in raw_segments:
+        if not seg["text"]:
+            continue
+
+        if not merged_segments:
+            merged_segments.append(seg)
+            continue
+
+        prev_seg = merged_segments[-1]
+
+        # Check for duplicate segment resulting from chunk overlap
+        is_duplicate = False
+        if abs(seg["start"] - prev_seg["start"]) < 3.0 or seg["start"] < prev_seg["end"]:
+            if seg["text"].lower() == prev_seg["text"].lower():
+                is_duplicate = True
+            elif seg["text"].lower() in prev_seg["text"].lower():
+                is_duplicate = True
+            elif prev_seg["text"].lower() in seg["text"].lower() and seg["start"] <= prev_seg["start"] + 1.0:
+                merged_segments[-1] = seg
+                is_duplicate = True
+
+        if not is_duplicate:
+            merged_segments.append(seg)
+
     return merged_segments
+

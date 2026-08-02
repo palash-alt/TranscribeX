@@ -2,16 +2,35 @@ import subprocess
 import shutil
 import os
 from utils.temp_manager import get_temp_audio_path
+from utils.logger import get_logger
+
+logger = get_logger()
 
 def is_ffmpeg_available() -> bool:
-    """Checks if ffmpeg executable is installed and available on system PATH."""
-    return shutil.which("ffmpeg") is not None
+    """
+    Performs deep health check verifying FFmpeg executable is present and responsive.
+    """
+    if shutil.which("ffmpeg") is None:
+        return False
+    try:
+        res = subprocess.run(
+            ["ffmpeg", "-version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=3
+        )
+        return res.returncode == 0
+    except Exception as e:
+        logger.warning(f"FFmpeg health check failed: {str(e)}")
+        return False
 
 def check_ffmpeg_installed() -> None:
-    """Raises RuntimeError if ffmpeg is missing from PATH."""
+    """Raises RuntimeError if ffmpeg is missing or unresponsive."""
     if not is_ffmpeg_available():
+        msg = "FFmpeg executable is not functional or missing on system PATH."
+        logger.error(msg)
         raise RuntimeError(
-            "FFmpeg executable not found on system PATH.\n"
+            "FFmpeg executable not found or broken on system PATH.\n"
             "Please install FFmpeg and add it to your system PATH."
         )
 

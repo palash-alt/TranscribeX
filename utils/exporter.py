@@ -46,15 +46,22 @@ def export_to_txt(data: Union[str, List[Dict[str, Any]]]) -> str:
         return "\n".join(seg.get("text", "") for seg in data if "text" in seg)
     return str(data)
 
+from utils.logger import get_logger
+
+logger = get_logger()
+
 def save_transcript_to_file(data: Union[str, List[Dict[str, Any]]], file_path: str) -> bool:
     """
     Saves transcript data (segments list or plain text) to the specified file path.
     Auto-detects file extension (.txt, .srt, .vtt) and applies appropriate formatting.
+    Performs safety checks for write permissions and invalid paths.
     """
     if data is None or not file_path:
+        logger.error("Save transcript failed: Empty data or invalid file path.")
         return False
 
-    ext = os.path.splitext(file_path)[1].lower()
+    abs_path = os.path.abspath(file_path)
+    ext = os.path.splitext(abs_path)[1].lower()
 
     if ext == ".srt" and isinstance(data, list):
         content = export_to_srt(data)
@@ -64,12 +71,19 @@ def save_transcript_to_file(data: Union[str, List[Dict[str, Any]]], file_path: s
         content = export_to_txt(data)
 
     try:
-        dirname = os.path.dirname(file_path)
+        dirname = os.path.dirname(abs_path)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname, exist_ok=True)
 
-        with open(file_path, "w", encoding="utf-8") as f:
+        # Check if existing file is writable
+        if os.path.exists(abs_path) and not os.access(abs_path, os.W_OK):
+            raise PermissionError(f"Target file is read-only or permission denied: {abs_path}")
+
+        with open(abs_path, "w", encoding="utf-8") as f:
             f.write(content)
+        logger.info(f"Transcript successfully saved to: {abs_path}")
         return True
     except Exception as e:
+        logger.error(f"Failed to save transcript to {abs_path}: {str(e)}")
         raise IOError(f"Failed to save file: {str(e)}")
+

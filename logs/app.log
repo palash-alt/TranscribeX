@@ -1,0 +1,17 @@
+[2026-08-02 10:37:08] [INFO] Processing 'C:/Users/lenovo/Downloads/Dhurandhar 2 - The Revenge (2026) Bollywood Hindi Movie UHQCam 1080p.mkv' using model 'small' on cpu.
+[2026-08-02 10:40:55] [INFO] User requested process cancellation.
+[2026-08-02 10:41:15] [INFO] User requested process cancellation.
+[2026-08-02 10:41:15] [INFO] User requested process cancellation.
+[2026-08-02 10:41:16] [INFO] User requested process cancellation.
+[2026-08-02 10:41:16] [INFO] User requested process cancellation.
+[2026-08-02 10:41:17] [INFO] User requested process cancellation.
+[2026-08-02 10:41:43] [INFO] Transcription process cancelled successfully.
+[2026-08-02 11:26:19] [INFO] Processing 'C:/Users/lenovo/Downloads/WhatsApp Video 2025-10-21 at 13.55.35_f98d9aa9.mp4' using model 'small' on cpu.
+[2026-08-02 11:27:36] [INFO] User requested process cancellation.
+[2026-08-02 11:28:12] [INFO] Transcription process cancelled successfully.
+[2026-08-02 11:42:52] [INFO] Processing 'C:/Users/lenovo/Downloads/WhatsApp Video 2025-10-21 at 13.55.35_f98d9aa9.mp4' using model 'small' on cpu.
+[2026-08-02 11:56:19] [ERROR] Error processing video: 'NoneType' object is not iterable
+[2026-08-02 12:03:45] [INFO] Processing 'C:/Users/lenovo/Downloads/WIN_20260801_09_57_18_Pro.mp4' using model 'small' on cpu.
+[2026-08-02 12:03:53] [ERROR] Error processing video: 'NoneType' object is not iterable
+[2026-08-02 12:04:43] [INFO] Processing 'C:/Users/lenovo/Downloads/WIN_20260801_09_57_18_Pro.mp4' using model 'small' on cpu.
+[2026-08-02 12:04:53] [ERROR] Error processing video: 'NoneType' object is not iterable

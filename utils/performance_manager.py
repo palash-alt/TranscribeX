@@ -23,22 +23,19 @@ def is_cuda_available() -> bool:
     except Exception:
         return False
 
-def get_adaptive_chunk_duration(available_ram_gb: float) -> int:
+def get_adaptive_chunk_duration(ram_gb: float) -> int:
     """
-    Calculates adaptive audio chunk duration in seconds based on available system RAM.
-    - < 4 GB available: 120s (2 min chunks) - Low Memory Mode
-    - 4 to 8 GB available: 300s (5 min chunks)
-    - 8 to 16 GB available: 600s (10 min chunks)
-    - > 16 GB available: 1200s (20 min chunks)
+    Calculates standardized audio chunk duration in seconds based on system RAM:
+    - Low-end systems (<=8 GB RAM): 60-second chunks
+    - Mid-range systems (8-16 GB RAM): 120-second chunks
+    - High-end systems (>16 GB RAM): 180-second chunks
     """
-    if available_ram_gb < 4.0:
+    if ram_gb <= 8.0:
+        return 60
+    elif ram_gb <= 16.0:
         return 120
-    elif available_ram_gb < 8.0:
-        return 300
-    elif available_ram_gb < 16.0:
-        return 600
     else:
-        return 1200
+        return 180
 
 def detect_optimal_hardware_config() -> Dict[str, Any]:
     """
@@ -50,7 +47,7 @@ def detect_optimal_hardware_config() -> Dict[str, Any]:
     total_ram = mem_info["total_gb"]
     cuda_supported = is_cuda_available()
 
-    chunk_duration = get_adaptive_chunk_duration(avail_ram)
+    chunk_duration = get_adaptive_chunk_duration(total_ram)
     is_low_mem = avail_ram < 4.0 or total_ram < 8.0
 
     if cuda_supported:

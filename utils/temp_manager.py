@@ -1,5 +1,6 @@
 import os
 import uuid
+import atexit
 from config import OUTPUT_DIR
 
 def get_temp_audio_path(extension: str = ".wav") -> str:
@@ -23,3 +24,7 @@ def cleanup_output_dir() -> None:
         for item in os.listdir(OUTPUT_DIR):
             if item.startswith("audio_") and item.endswith(".wav"):
                 cleanup_file(os.path.join(OUTPUT_DIR, item))
+
+# Register exit hook for automatic temp file cleanup
+atexit.register(cleanup_output_dir)
+
